@@ -8,7 +8,7 @@
 | ---------------- | ---------------------------------------------------------------------- |
 | `reference.html` | Вёрстка, стили и логика одним файлом — рабочая реализация на чистом JS |
 
-\_Чтобы поднять страницу - можете использовать `Go live` в кодспейсе или `live-server` пакет из npm (`npm install -g` чтобы поставить на всю среду разработки, а не в проект)
+\_Чтобы поднять страницу - можете использовать `Go live` в кодспейсе или `live-server` пакет из npm (`npm install -g live-server` чтобы поставить на всю среду разработки, а не в проект)
 
 ## Референс архитектуры приложения
 
@@ -22,12 +22,16 @@ _Работаем также в папках `components`, `pages`, в комп�
 App
  ├─ ViewSwitch
  ├─ ShelfScreen
- │    ├─ BookForm
+ │    └─ BookForm
+ │         ├─ Checkbox
+ │         ├─ Input
+ │         └─ Button
  │    ├─ FilterChip
  │    └─ BookList
  │         └─ BookItem
  └─ StatsScreen
       ├─ StatsSummary
+      │    └─ StatCard
       └─ ReadingCounter
 ```
 
@@ -251,5 +255,67 @@ useEffect(() => {
 }, [query]);
 ```
 
-Каждое новое нажатие клавиши отменяет предыдущий незавершённый таймер —
-запрос улетает только когда пользователь на 400мс перестал печатать.
+## Пример: Поиск по строке (фильтрация списка)
+
+Часто нужно отфильтровать список карточек по тому, что ввёл пользователь в поле поиска. Пропсами тут не обойтись одними — понадобится **state**, потому что значение поля ввода меняется во время работы приложения. Общая логика:
+
+1. Состояние строки поиска (`searchQuery`) хранится в **родительском** компоненте (том, у которого есть доступ ко всему массиву данных) — например, в `App`.
+2. Поле `<input>` — **контролируемый компонент**: его значение берётся из state, а изменения приходят через `onChange`.
+3. Перед рендерингом список фильтруется методом `.filter()` по введённой строке.
+4. В дочерний компонент (`CourseList`) передаётся **уже отфильтрованный массив**, а не исходный — сам список ничего не знает о поиске.
+
+```jsx
+import { useState } from "react";
+import courses from "./data/courses.json";
+
+function App() {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Фильтруем массив по названию курса, без учёта регистра
+  const filteredCourses = courses.filter((course) =>
+    course.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <>
+      <Header />
+      <SearchBar value={searchQuery} onChange={setSearchQuery} />
+      <CourseList courses={filteredCourses} />
+      <Footer />
+    </>
+  );
+}
+```
+
+Компонент поля поиска получает текущее значение и функцию-колбэк через пропсы и вызывает её при каждом вводе — сам он состояние не хранит:
+
+```jsx
+function SearchBar({ value, onChange }) {
+  return (
+    <input
+      type="text"
+      placeholder="Найти курс..."
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+```
+
+`CourseList` при этом не меняется вообще — он как получал массив курсов через проп и рендерил его через `.map()`, так и продолжает это делать, не зная, что массив уже отфильтрован:
+
+```jsx
+function CourseList({ courses }) {
+  if (courses.length === 0) {
+    return <p>Курсы не найдены</p>;
+  }
+
+  return (
+    <div className="courses__grid">
+      {courses.map((course) => (
+        <CourseCard key={course.id} course={course} />
+      ))}
+    </div>
+  );
+}
+```
